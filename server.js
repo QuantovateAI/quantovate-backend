@@ -1,36 +1,55 @@
+// server.js
 const express = require("express");
 const bodyParser = require("body-parser");
 const cors = require("cors");
 const { Configuration, OpenAIApi } = require("openai");
 
 const app = express();
+const port = process.env.PORT || 3000;
+
+require("dotenv").config();
+
 app.use(cors());
 app.use(bodyParser.json());
 
+// 🔐 OpenAI API Setup
 const configuration = new Configuration({
   apiKey: process.env.OPENAI_API_KEY,
 });
 const openai = new OpenAIApi(configuration);
 
+// 🎯 Trade Evaluation Endpoint
 app.post("/api/evaluate", async (req, res) => {
-  const tradeText = req.body.trade;
+  const { trade } = req.body;
 
-  const prompt = `You are an AI trade evaluation engine. Based on the trade below, assess the quality on a scale of 1–100 across 5 categories: technical setup, catalyst strength, risk/reward, volatility profile, and conviction clarity. Provide a score and comment for each.\n\nTRADE:\n${tradeText}\n\nOutput format:\n1. Technical Setup: x/20 — comment\n2. Catalyst Strength: x/20 — comment\n3. Risk/Reward: x/20 — comment\n4. Volatility Profile: x/20 — comment\n5. Conviction Clarity: x/20 — comment\n✅ Overall Score: x/100\n✅ Recommendation: ...`;
+  if (!trade || typeof trade !== "string") {
+    return res.status(400).json({ result: "❌ Invalid trade input." });
+  }
 
   try {
-    const gptResponse = await openai.createChatCompletion({
+    const completion = await openai.createChatCompletion({
       model: "gpt-4",
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.7,
+      messages: [
+        {
+          role: "system",
+          content:
+            "You're a professional market strategist. Evaluate this trade idea and return a short analysis covering risk, potential reward, and strategic soundness.",
+        },
+        {
+          role: "user",
+          content: trade,
+        },
+      ],
     });
 
-    const result = gptResponse.data.choices[0].message.content;
+    const result = completion.data.choices[0].message.content.trim();
     res.json({ result });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "GPT evaluation failed" });
+    console.error("OpenAI error:", error.message);
+    res.status(500).json({ result: "⚠️ Failed to evaluate trade." });
   }
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(port, () => {
+  console.log(`🚀 Server running on http://localhost:${port}`);
+});
